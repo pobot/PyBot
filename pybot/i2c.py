@@ -195,8 +195,11 @@ else:
         methods to xx_i2c_block_data, since SMBus and I2C do not
         work the same for block data I/O.
 
+        In addition, this class takes care of serializing I/O on the bus, in
+        case of multi-threaded usage.
+
         Sub-class SMBus would have been lighter as an implementation,
-        but it is not an acceptable base type
+        but it is not an acceptable base type.
         """
 
         def __init__(self, bus_id=1, **kwargs):
