@@ -55,8 +55,6 @@ Here is another example for reading an input, f.i. a switch connected on pin 11.
 
 Pretty simple, no ?
 
-Note that the current version includes only basic functions, and still lacks interrupts
-configuration stuff. This will come ASAP, but feel free to contribute on this topic if you need this now.
 """
 
 __author__ = 'Eric PASCUAL for POBOT'
@@ -158,13 +156,27 @@ class MCP23017(object):
     PORT_B = 1
 
     # the register addressing scheme used here supposes that IOCON.BANK is set to 0 (default value)
-    # and thus that port registers are paired, so that address(xxxB) == address(xxxA + 1)
+    # and thus that port registers are sequential, so that address(xxxB) == address(xxxA + 1)
     IODIR = 0x00
     IPOL = 0x02
     GPINTEN = 0x04
+    DEFVAL = 0x06
+    INTCON = 0x08
+    IOCON = 0x0A
     GPPU = 0x0C
+    INTF = 0x0E
+    INTCAP = 0x10
     GPIO = 0x12
     OLAT = 0x14
+
+    # IOCON register flag masks
+    IOCON_INTPOL = 0x02
+    IOCON_ODR = 0x04
+    IOCON_HAEN = 0x08
+    IOCON_DISSLW = 0x10
+    IOCON_SEQOP = 0x20
+    IOCON_MIRROR = 0x40
+    IOCON_BANK = 0x80
 
     def __init__(self, bus, i2c_addr):
         """
@@ -210,8 +222,14 @@ class Port(object):
     operations are optimized by removing the need for physically reading the registers
     content.
     """
+    # sets the cache in unset state
     _IODIR_cache = None
     _GPPU_cache = None
+    _IPOL_cache = None
+    _IOCON_cache = None
+    _GPINTEN_cache = None
+    _INTCON_cache = None
+    _DEFVAL_cache = None
 
     def __init__(self, expander, port_num):
         """
@@ -229,6 +247,32 @@ class Port(object):
         """ Updates the registers cache. """
         self._IODIR_cache = self._expander.read_register(MCP23017.IODIR + self._port_num)
         self._GPPU_cache = self._expander.read_register(MCP23017.GPPU + self._port_num)
+        self._IPOL_cache = self._expander.read_register(MCP23017.IPOL + self._port_num)
+        self._IOCON_cache = self._expander.read_register(MCP23017.IOCON + self._port_num)
+        self._GPINTEN_cache = self._expander.read_register(MCP23017.GPINTEN + self._port_num)
+        self._DEFVAL_cache = self._expander.read_register(MCP23017.DEFVAL + self._port_num)
+        self._INTCON_cache = self._expander.read_register(MCP23017.INTCON + self._port_num)
+
+    @staticmethod
+    def _change_bit(bit_num, value, byte):
+        return byte | (1 << bit_num) if value else byte & ~ (1 << bit_num)
+
+    @staticmethod
+    def _change_bit_with_mask(bit_mask, value, byte):
+        return byte | bit_mask if value else byte & ~ bit_mask
+
+    @staticmethod
+    def _test_bit(bit_num, byte):
+        return (byte & (1 << bit_num)) != 0
+
+    @staticmethod
+    def _test_bit_with_mask(bit_mask, byte):
+        return (byte & bit_mask) != 0
+
+    @staticmethod
+    def _check_io_num(io_num):
+        if not 0 <= io_num < 8:
+            raise ValueError('invalid IO num (%d)' % io_num)
 
     @property
     def io_directions(self):
@@ -246,35 +290,113 @@ class Port(object):
         """ Sets the direction of a single IO
         :param int io_num: the IO num ([0-7])
         :param int direction: IO.DIR_INPUT or IO.DIR_INPUT
+        :raise: ValueError if out of range io_num
         """
-        if direction == IO.DIR_INPUT:
-            b = self._IODIR_cache | (1 << io_num)
-        else:
-            b = self._IODIR_cache & ~ (1 << io_num)
-        self._expander.write_register(MCP23017.IODIR + self._port_num, b)
-        self._IODIR_cache = b
+        self._check_io_num(io_num)
+        self.io_directions = self._change_bit(io_num, direction == IO.DIR_INPUT, self._GPPU_cache)
 
     @property
-    def pullups(self):
+    def pullups_enabled(self):
         """ Returns the current settings of the port inputs pullups. """
         return self._GPPU_cache
 
-    @pullups.setter
-    def pullups(self, states):
+    @pullups_enabled.setter
+    def pullups_enabled(self, settings):
         """ Configures the port inputs pullups. """
-        self._GPPU_cache = self._expander.write_register(MCP23017.GPPU + self._port_num, states)
+        self._GPPU_cache = self._expander.write_register(MCP23017.GPPU + self._port_num, settings)
 
     def enable_pullup(self, io_num, enabled):
         """ Configures a single input pullup.
         :param int io_num: the IO num ([0-7])
         :param bool enabled: is the pullup enabled ?
+        :raise: ValueError if out of range io_num
         """
-        if enabled:
-            b = self._GPPU_cache | (1 << io_num)
-        else:
-            b = self._GPPU_cache & ~ (1 << io_num)
-        self._expander.write_register(MCP23017.GPPU + self._port_num, b)
-        self._GPPU_cache = b
+        self._check_io_num(io_num)
+        self.pullups_enabled = self._change_bit(io_num, enabled, self._GPPU_cache)
+
+    @property
+    def inputs_inverted(self):
+        """ Returns the current settings of the port inputs polarity inversion. """
+        return self._IPOL_cache
+
+    @inputs_inverted.setter
+    def inputs_inverted(self, settings):
+        """ Configures the port inputs polarity inversion. """
+        self._IPOL_cache = self._expander.write_register(MCP23017.IPOL + self._port_num, settings)
+
+    def invert_input(self, io_num, inverted):
+        """ Configures the inversion of a given input.
+        :param int io_num: the IO num ([0-7])
+        :param bool inverted: is the input inverted ?
+        :raise: ValueError if out of range io_num
+        """
+        self._check_io_num(io_num)
+        self.interrupts_enabled = self._change_bit(io_num, inverted, self._IPOL_cache)
+
+    @property
+    def interrupts_enabled(self):
+        """ Returns the current settings of the port inputs interrupts enabling. """
+        return self._GPINTEN_cache
+
+    @interrupts_enabled.setter
+    def interrupts_enabled(self, settings):
+        """ Configures the port inputs interrupts enabling. """
+        self._GPINTEN_cache = self._expander.write_register(MCP23017.GPINTEN + self._port_num, settings)
+
+    def enable_interrupt(self, io_num, enabled):
+        """ Enables interrupts for a given input.
+        :param int io_num: the IO num ([0-7])
+        :param bool enabled: is interrupt enabled ?
+        :raise: ValueError if out of range io_num
+        """
+        self._check_io_num(io_num)
+        self.interrupts_enabled = self._change_bit(io_num, enabled, self._GPINTEN_cache)
+
+    @property
+    def interrupt_sources(self):
+        """ Returns the current settings of the port interrupt compare sources. """
+        return self._INTCON_cache
+
+    @interrupt_sources.setter
+    def interrupt_sources(self, settings):
+        """ Configures the port interrupt compare sources. """
+        self._INTCON_cache = self._expander.write_register(MCP23017.INTCON + self._port_num, settings)
+
+    def set_interrupt_source(self, io_num, source):
+        """ Sets the compare source for input interrupts for a given input.
+        :param int io_num: the IO num ([0-7])
+        :param int source: IO.INT_COMPARE or IO.INT_CHANGE
+        :raise: ValueError if out of range io_num
+        """
+        self._check_io_num(io_num)
+        self.interrupt_sources = self._change_bit(io_num, source, self._INTCON_cache)
+
+    @property
+    def default_values(self):
+        """ Returns the current settings of the port interrupt default values. """
+        return self._DEFVAL_cache
+
+    @default_values.setter
+    def default_values(self, settings):
+        """ Configures the port interrupt default values. """
+        self._DEFVAL_cache = self._expander.write_register(MCP23017.DEFVAL + self._port_num, settings)
+
+    def set_default_value(self, io_num, value):
+        """ Sets the input change default value for a given input.
+        :param int io_num: the IO num ([0-7])
+        :param int value: default value (0 or 1)
+        :raise: ValueError if out of range io_num
+        """
+        self._check_io_num(io_num)
+        self.default_values = self._change_bit(io_num, value, self._DEFVAL_cache)
+
+    @property
+    def configuration(self):
+        return self._IOCON_cache
+
+    @configuration.setter
+    def configuration(self, value):
+        self._IOCON_cache = self._expander.write_register(self._IOCON_cache + self._port_num, value)
 
     def write(self, value):
         """ Write a value to the port
@@ -301,6 +423,9 @@ class IO(object):
     """
     DIR_OUTPUT = 0
     DIR_INPUT = 1
+    INT_CHANGE = 0
+    INT_COMPARE = 1
+
 
     def __init__(self, port, num, is_input):
         """
