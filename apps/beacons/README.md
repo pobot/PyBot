@@ -1,5 +1,5 @@
 A demonstrator of goniometric location computation by using
-tange finders based scanning beacons.
+range finders based scanning beacons.
 
 Developed for illustrating the application of simple
 trigonometric functions for young students.
