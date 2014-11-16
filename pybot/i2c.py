@@ -1,18 +1,18 @@
-'''
-I2C base stuff
+"""
+A couple of classes for interacting with devices accessible on I2C buses.
+"""
 
-@author: eric
-'''
+__author__ = "Eric Pascual (eric@pobot.org)"
 
 import serial
 import time
 import threading
-import smbus
+
 
 class I2CBus(object):
-    '''
-    Abstract class for I2C interface implementations
-    '''
+    """
+    Abstract root class for I2C interface implementations
+    """
 
     def __init__(self, debug=False, simulate=False, msb_first=False):
         self.msb_first = msb_first
@@ -20,27 +20,71 @@ class I2CBus(object):
         self._simulate = simulate
 
     def read_byte(self, addr):
+        """ Read a single byte from a device.
+        :param int addr: the device address
+        :return: the byte value
+        :rtype: int
+        """
         raise NotImplementedError()
 
     def write_byte(self, addr, data):
+        """ Write a single byte to a device.
+        :param int addr: the device address
+        :param int data: the byte value
+        """
         raise NotImplementedError()
 
     def read_byte_data(self, addr, reg):
+        """ Read the content of a byte size register of a device
+        :param int addr: device address
+        :param int reg: register address on the device
+        :return: the register content
+        :rtype: int
+        """
         raise NotImplementedError()
 
     def write_byte_data(self, addr, reg, data):
+        """ Set the content of a byte size register of a device
+        :param int addr: device address
+        :param int reg: register address on the device
+        :param int data: the register content
+        """
         raise NotImplementedError()
 
     def read_word_data(self, addr, reg):
+        """ Read the content of a word size register of a device
+        :param int addr: device address
+        :param int reg: register address on the device
+        :return: the register content
+        :rtype: int
+        """
         raise NotImplementedError()
 
     def write_word_data(self, addr, reg, data):
+        """ Set the content of a word size register of a device
+        :param int addr: device address
+        :param int reg: register address on the device
+        :param int data: the register content
+        """
         raise NotImplementedError()
 
     def read_block_data(self, addr, reg, nbytes):
+        """ Read a block of bytes, starting at a given register of the device
+        :param int addr: device address
+        :param int reg: register address on the device
+        :param int nbytes: the number of bytes to read
+        :return: the data read
+        :rtype: array of [int]
+        """
         raise NotImplementedError()
 
     def write_block_data(self, addr, reg, data):
+        """ Write a block of bytes, starting at a given register of the device
+        :param int addr: device address
+        :param int reg: register address on the device
+        :param data: the bytes to write
+        :type data: array of [int]
+        """
         raise NotImplementedError()
 
 
@@ -56,12 +100,6 @@ class USB2I2CBus(I2CBus):
     USBI2C_CMD = 0x5A
 
     def __init__(self, dev, **kwargs):
-        """ Constructor.
-
-        Parameters:
-
-
-        """
         I2CBus.__init__(self, **kwargs)
         self._serial = serial.Serial(dev, baudrate=19200, timeout=0.5)
         self._serial.flushInput()
@@ -144,52 +182,62 @@ class USB2I2CBus(I2CBus):
         if not result:
             raise RuntimeError('write_block_data failed with result=%d' % result)
 
-class SMBusI2CBus(I2CBus):
-    """ I2C bus access via SMBus (e.g. RasPi).
 
-    This is just a wrapper of SMBus, diverting xx_block_data
-    methods to xx_i2c_block_data, since SMBus and I2C do not
-    work the same for block data I/O.
+try:
+    import smbus
+except ImportError:
+    print("[W] this system does not have smbus installed. SMBusI2CBus class will thus not be available.")
+else:
+    class SMBusI2CBus(I2CBus):
+        """ I2C bus access via SMBus (e.g. RasPi).
 
-    Sub-class SMBus would have been lighter as an implementation,
-    but it is not an acceptable base type
-    """
+        This is just a wrapper of SMBus, diverting xx_block_data
+        methods to xx_i2c_block_data, since SMBus and I2C do not
+        work the same for block data I/O.
 
-    def __init__(self, bus_id=1, **kwargs):
-        I2CBus.__init__(self, **kwargs)
-        self._bus = smbus.SMBus(bus_id)
-        # I/O serialization lock
-        self._lock = threading.Lock()
+        Sub-class SMBus would have been lighter as an implementation,
+        but it is not an acceptable base type
+        """
 
-    def read_byte(self, addr):
-        with self._lock:
-            return self._bus.read_byte(addr)
+        def __init__(self, bus_id=1, **kwargs):
+            """
+            :param int bus_id: the SMBus id (see Raspberry Pi documentation)
+            :param kwargs: parameters transmitted to :py:class:`smbus.SMBus` initializer
+            """
+            I2CBus.__init__(self, **kwargs)
+            self._bus = smbus.SMBus(bus_id)
+            # I/O serialization lock
+            self._lock = threading.Lock()
 
-    def write_byte(self, addr, data):
-        with self._lock:
-            self._bus.write_byte(addr, data)
+        def read_byte(self, addr):
+            with self._lock:
+                return self._bus.read_byte(addr)
 
-    def read_byte_data(self, addr, reg):
-        with self._lock:
-            return self._bus.read_byte_data(addr, reg)
+        def write_byte(self, addr, data):
+            with self._lock:
+                self._bus.write_byte(addr, data)
 
-    def write_byte_data(self, addr, reg, data):
-        with self._lock:
-            self._bus.write_byte_data(addr, reg, data)
+        def read_byte_data(self, addr, reg):
+            with self._lock:
+                return self._bus.read_byte_data(addr, reg)
 
-    def read_word_data(self, addr, reg):
-        with self._lock:
-            return self._bus.read_word_data(addr, reg)
+        def write_byte_data(self, addr, reg, data):
+            with self._lock:
+                self._bus.write_byte_data(addr, reg, data)
 
-    def write_word_data(self, addr, reg, data):
-        with self._lock:
-            self._bus.write_word_data(addr, reg, data)
+        def read_word_data(self, addr, reg):
+            with self._lock:
+                return self._bus.read_word_data(addr, reg)
 
-    def read_block_data(self, addr, reg, nbytes):
-        with self._lock:
-            return self._bus.read_i2c_block_data(addr, reg, nbytes)
+        def write_word_data(self, addr, reg, data):
+            with self._lock:
+                self._bus.write_word_data(addr, reg, data)
 
-    def write_block_data(self, addr, reg, data):
-        with self._lock:
-            self._bus.write_i2c_block_data(addr, reg, data)
+        def read_block_data(self, addr, reg, nbytes):
+            with self._lock:
+                return self._bus.read_i2c_block_data(addr, reg, nbytes)
+
+        def write_block_data(self, addr, reg, data):
+            with self._lock:
+                self._bus.write_i2c_block_data(addr, reg, data)
 
