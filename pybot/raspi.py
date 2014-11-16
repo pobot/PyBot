@@ -17,7 +17,7 @@ else:
             name, value = (m.group(1), m.group(2))
             if name == "Revision":
                 i2c_bus_id = 0 if value[-4:] in ('0002', '0003') else 1
-        break
+                break
 
     # Define I2C bus and initialize it
     try:
@@ -25,4 +25,4 @@ else:
     except ImportError:
         raise NotImplementedError('python-smbus is not installed on this system')
     else:
-        i2c_bus = smbus.SMBus(i2c_bus_id);
+        i2c_bus = smbus.SMBus(i2c_bus_id)
