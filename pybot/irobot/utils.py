@@ -24,10 +24,12 @@ import math
 
 from .defs import *
 
+
 def inverse(b):
     """ Two-complement inverse value computation, use to wait
     for the negation of a given event in the above list."""
     return (~b & 0xff) + 1
+
 
 def int16_to_bytes(v):
     """ Convenience function to convert a 16 bits int into the corresponding
@@ -35,30 +37,36 @@ def int16_to_bytes(v):
     i16 = int(v)
     return [(i16 & 0xff00) >> 8, i16 & 0xff]
 
+
 def byte_to_buttons(byte):
     """ Convenience function to convert a bit mask byte into a list of button ids."""
-    return [b for b in [OI_BUTTONS_PLAY, OI_BUTTONS_ADVANCE] if b & int(byte)]
+    return [b for b in [OI_BUTTONS_PLAY, OI_BUTTONS_ADVANCE] if b & byte]
+
 
 def byte_to_bumpers(byte):
     """ Convenience function to convert a bit mask byte into a list of bumper parts."""
-    return [b for b in [OI_BUMPER_LEFT, OI_BUMPER_RIGHT] if b & int(byte)]
+    return [b for b in [OI_BUMPER_LEFT, OI_BUMPER_RIGHT] if b & byte]
+
 
 def byte_to_wheel_drops(byte):
     """ Convenience function to convert a bit mask byte into a list of wheel drop sensors."""
-    return [b for b in [OI_WHEEL_DROP_LEFT, OI_WHEEL_DROP_RIGHT, OI_CASTER_DROP] if b & int(byte)]
+    return [b for b in [OI_WHEEL_DROP_LEFT, OI_WHEEL_DROP_RIGHT, OI_CASTER_DROP] if b & byte]
+
 
 def byte_to_drivers(byte):
     """ Convenience function to convert a bit mask byte into a list of driver ids."""
-    return [b for b in [OI_DRIVER_0, OI_DRIVER_1, OI_DRIVER_2] if b & int(byte)]
+    return [b for b in [OI_DRIVER_0, OI_DRIVER_1, OI_DRIVER_2] if b & byte]
+
 
 def leds_to_byte(leds):
     """ Convenience function to convert a list of LEDs to the corresponding bit mask."""
     return reduce(lambda x, y : x | y, int(leds))
 
+
 def dump_group_packets(gpackets):
     """ Helper function printing a list of packets in a friendly way.
 
-    Works only for packets havind a namedtuple associated representation.
+    Works only for packets having a namedtuple associated representation.
     """
     if type(gpackets) is not list:
         gpackets = [gpackets]
@@ -67,28 +75,31 @@ def dump_group_packets(gpackets):
         for k, v in pkt._asdict().iteritems():          #pylint: disable=W0212
             print(" - %s : %s" % (k, v))
 
+
 def time_for_distance(dist_mm, velocity):
-    """ Returns the theoritical time required to travel a given distance
+    """ Returns the theoretical time required to travel a given distance
     at a given speed."""
-    return abs(float(dist_mm) / velocity)
+    return abs(float(dist_mm) / float(velocity))
+
 
 def time_for_angle(angle_deg, velocity):
-    """ Returns the theoritical time required to spin  a given angle
+    """ Returns the theoretical time required to spin  a given angle
     with a given wheel speed."""
     return time_for_distance(
         math.radians(angle_deg) * WHEEL_TO_WHEEL_DIST / 2,
         velocity
     )
 
+
 def make_script(*commands):
     """ Returns the bytes sequence of a script composed of the given commands."""
     return reduce(lambda x, y: x + y, commands)
 
-#
-# Song helpers
-#
+
 
 class Song(object):
+    """ Song helper
+    """
     _MUSIC_SCALE = ('C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B')
     _REST = 0
 
@@ -116,6 +127,7 @@ class Song(object):
     def add_note(self, note, octave, duration):
         self._score.append(Song.note_number(note, octave) if note else Song._REST)
         self._score.append(duration)
+        return self
 
     def clear(self):
         self._score = []
