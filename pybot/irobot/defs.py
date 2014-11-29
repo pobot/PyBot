@@ -312,7 +312,7 @@ GroupPacket5 = namedtuple('GroupPacket5', [
     'left_velocity'
 ])
 
-# Index of namedtuples, keyed by the corresponding group packet id
+# Index of named tuples, keyed by the corresponding group packet id
 
 GROUP_PACKET_CLASSES = [
     None,
