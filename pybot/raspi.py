@@ -10,7 +10,7 @@ if not platform.machine().startswith('armv6'):
 else:
     import re
 
-     # detect i2C bus id depending on the RasPi version
+    # detect i2C bus id depending on the RasPi version
     for line in open('/proc/cpuinfo').readlines():
         m = re.match('(.*?)\s*:\s*(.*)', line)
         if m:
@@ -22,7 +22,9 @@ else:
     # Define I2C bus and initialize it
     try:
         import smbus
+
     except ImportError:
-        raise NotImplementedError('python-smbus is not installed on this system')
+        raise NotImplementedError('python-smbus is not installed on this system.')
+
     else:
         i2c_bus = smbus.SMBus(i2c_bus_id)
