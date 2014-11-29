@@ -32,6 +32,27 @@ __license__ = "LGPL"
 
 LedsState = namedtuple('LedsState', 'play advance pwr_color pwr_level')
 
+
+class TraceOptions(object):
+    TRACE_RXTX, TRACE_STREAM_FSA = range(2)
+    _TRACE_FLAGS_ATTRS = ('rxtx', 'stream_fsa')
+
+    def __init__(self, trace_format='h', flags=None):
+        if trace_format == 'h':
+            self.trace_fmt = lambda b : '%02x' % ord(b)
+        elif trace_format == 'd':
+            self.trace_fmt = lambda b : str(ord(b))
+        else:
+            raise ValueError('invalid trace format')
+
+        for i, attr in enumerate(self._TRACE_FLAGS_ATTRS):
+            setattr(self, attr, i in flags)
+
+
+class CreateError(Exception):
+    pass
+
+
 class IRobotCreate(object):
     """ Models the Create robot and provides convenient methods to interact with it.
 
@@ -39,14 +60,6 @@ class IRobotCreate(object):
     too many method calls. It could have be done to avoid duplicating in some
     way the command definitions, but the benefit didn't compensate the drawbacks.
     """
-
-    @staticmethod
-    def _hex_format(b):
-        return '%02x' % ord(b)
-
-    @staticmethod
-    def _dec_format(b):
-        return str(ord(b))
 
     def __init__(self, port, baudrate=57600, debug=False, simulate=False, trace=None):
         """ Constructor:
@@ -73,10 +86,14 @@ class IRobotCreate(object):
         self._lock = threading.Lock()
 
         self._debug = debug
-        self._trace = {
-            'h' : IRobotCreate._hex_format,
-            'd' : IRobotCreate._dec_format
-        }[trace] if trace else None
+        self._trace = trace
+        if trace:
+            if not isinstance(trace, TraceOptions):
+                raise ValueError('trace options type mismatch')
+            self._trace_func = trace.trace_fmt
+        else:
+            self._trace_func = None
+
         self._simulate = simulate
 
         self._log = log.getLogger(type(self).__name__)
@@ -94,7 +111,7 @@ class IRobotCreate(object):
         # Initial state is supposed off (this will be set in constructor)
         self._pwm = [0]*3
 
-        # events used to notify asynchonous opérations
+        # events used to notify asynchronous operations
         self._evt_packets = threading.Event()
         self._evt_move = threading.Event()
 
@@ -107,19 +124,19 @@ class IRobotCreate(object):
     def debug_settings(self):
         """ Provides the current debug settings as a tuple containing :
             - the debug status
-            - the serial data trace settings
+            - the trace settings
             - the simulate option state
         """
         return (self._debug, self._trace, self._simulate)
 
     @property
     def leds(self):
-        """ The current state of the LEDs, as a LedState namedtupe."""
+        """ The current state of the LEDs, as a LedState named tuple."""
         return self._leds
 
     @property
     def drivers_pwm(self):
-        """ The curresnt settings of the low side drivers PWM."""
+        """ The current settings of the low side drivers PWM."""
         return self._pwm
 
     @property
@@ -141,13 +158,14 @@ class IRobotCreate(object):
             # stringify a byte list
             data = ''.join([chr(b) for b in data])
 
-        if self._trace or self._simulate:
-            print(':Tx> %s' % ' '.join(self._trace(b) for b in data))
+        if (self._trace_func and self._trace.rxtx) or self._simulate:
+            self._log.debug(':Tx> %s', ' '.join(self._trace_func(b) for b in data))
         if self._simulate:
             return
         with self._lock:
+            self._serial.flushInput()
             self._serial.write(data)
-            self._serial.flush()
+            self._serial.flushOutput()
 
     def _send_byte(self, byte):
         self._send_block(chr(byte))
@@ -164,11 +182,13 @@ class IRobotCreate(object):
             while cnt < nbytes and time.time() < maxwait:
                 data = data + self._serial.read(nbytes - cnt)
                 cnt = len(data)
-            self._serial.flushInput()
 
-        if self._trace:
-            rx = ' '.join(self._trace(b) for b in data)
-            print('<Rx: %s' % rx)
+        if not data:
+            raise CreateError('no reply received')
+
+        if self._trace_func and self._trace.rxtx:
+            rx = ' '.join(self._trace_func(b) for b in data)
+            self._log.debug('<Rx: %s', rx)
 
         return data
 
@@ -186,9 +206,15 @@ class IRobotCreate(object):
             ValueError if mode parameter is not of the expected ones
         """
         self._send_byte(OI_START)
+        time.sleep(0.2)
+
+        # check all is ok be getting the battery level
+        mV, = struct.unpack('!H', self.get_sensor_packet(OI_PACKET_BATTERY_VOLTAGE))
+        self._log.info('battery voltage : %.2f', mV / 1000.0)
+
         if mode != OI_MODE_PASSIVE:
             self.set_mode(mode)
-        time.sleep(0.5)
+        time.sleep(0.2)
         self.set_low_side_drivers(0)
         self.set_digital_outs(0)
 
@@ -269,7 +295,7 @@ class IRobotCreate(object):
         If no distance is provided, it is up to the caller to manage when to stop
         or change the move.
 
-        In both cases, the methods exits immediatly.
+        In both cases, the methods exits immediately.
 
         Note:
             The distance checking is implemented using a poor man's strategy
@@ -284,8 +310,8 @@ class IRobotCreate(object):
             velocity:
                 robot's center velocity (in mm/sec)
             radius:
-                radius (in mm) of the path to be folowed
-                (defaut: special value corresponding to a straight path
+                radius (in mm) of the path to be followed
+                (default: special value corresponding to a straight path
             distance:
                 distance to be traveled (in mm). If provided, the method
                 will exists only after this distance is supposed to be traveled,
@@ -340,10 +366,10 @@ class IRobotCreate(object):
         If a spin angle is provided, the method will wait for the time for this angle
         to be reached (based on the requested speed) and then stops the robot and exit.
         In addition, the provided spin direction (if any) is ignored, and replaced by
-        the one infered from the angle sign (positive = CCW)
+        the one inferred from the angle sign (positive = CCW)
 
-        If no angle is provided, the move is initiated and the method exits immédiatly,
-        leaving the robot moving. It is the responsabilitéy of the caller to handle
+        If no angle is provided, the move is initiated and the method exits immediately,
+        leaving the robot moving. It is the responsibility of the caller to handle
         what should happen then.
 
         See drive() method documentation for implementation note about the strategy
@@ -513,7 +539,7 @@ class IRobotCreate(object):
 
 
     def get_unpacked_sensor_packet(self, packet_id):
-        """ Convenience method wich returns an unpacked form for some
+        """ Convenience method which returns an unpacked form for some
         of the packet groups.
 
         It only works for groups 1 to 5.
@@ -586,7 +612,7 @@ class IRobotCreate(object):
         empty if no button is currently pressed.
         """
         reply = self.get_sensor_packet(OI_PACKET_BUTTONS)
-        return byte_to_buttons(reply[0])
+        return byte_to_buttons(ord(reply[0]))
 
     def get_bumpers(self):
         """ Gets the current state of the bumper, as the list of pressed parts.
@@ -595,7 +621,7 @@ class IRobotCreate(object):
         empty if the bumper is currently not pressed.
         """
         reply = self.get_sensor_packet(OI_PACKET_BUMPS_AND_WHEEL_DROPS)
-        return byte_to_bumpers(reply[0])
+        return byte_to_bumpers(ord(reply[0]))
 
     def get_wheel_drops(self):
         """ Gets the current state of the wheel drop sensors, as the list of
@@ -605,7 +631,7 @@ class IRobotCreate(object):
         and can be empty if all wheels are on the ground.
         """
         reply = self.get_sensor_packet(OI_PACKET_BUMPS_AND_WHEEL_DROPS)
-        return byte_to_wheel_drops(reply[0])
+        return byte_to_wheel_drops(ord(reply[0]))
 
     def define_script(self, script):
         """ Records a script to be played later.
@@ -765,9 +791,10 @@ class IRobotCreate(object):
 
 _STATE_IDLE = 0
 _STATE_GOT_HEADER = 1
-_STATE_GOT_LENGTH = 2
+_STATE_AT_PACKET_START = 2
 _STATE_IN_PACKET = 3
 _STATE_IN_CHECKSUM = 4
+
 
 class _StreamListener(threading.Thread):
     """ The packet stream listener.
@@ -794,7 +821,7 @@ class _StreamListener(threading.Thread):
         while not self._stopevent.isSet():
             while _serial.inWaiting():
                 b = ord(_serial.read()[0])
-                if trace:
+                if trace and trace.stream_fsa:
                     self._robot.log.debug(
                         '<Rx: %d - state=%d - total_expected=%d - expected_bytes=%d',
                         b, state, total_expected, expected_bytes
@@ -806,12 +833,16 @@ class _StreamListener(threading.Thread):
 
                 elif state == _STATE_GOT_HEADER:
                     total_expected = b
-                    state = _STATE_GOT_LENGTH
+                    # if trace:
+                    #     self._robot.log.debug('at stream frame start (expecting %d bytes total)', total_expected)
+                    state = _STATE_AT_PACKET_START
 
-                elif state == _STATE_GOT_LENGTH:
+                elif state == _STATE_AT_PACKET_START:
                     packet_id = b
                     packet_data = ''
                     expected_bytes = OI_PACKET_SIZES[packet_id]
+                    # if trace:
+                    #     self._robot.log.debug('at stream packet %d start. (expecting %d bytes)', packet_id, expected_bytes)
                     total_expected -= 1
                     state = _STATE_IN_PACKET
 
@@ -820,9 +851,13 @@ class _StreamListener(threading.Thread):
                     total_expected -= 1
                     expected_bytes -= 1
                     if expected_bytes == 0:
+                        if trace and trace.stream_fsa:
+                            self._robot.log.debug('packet %d available', packet_id)
                         packets.append((packet_id, packet_data))
                         if total_expected == 0:
                             state = _STATE_IN_CHECKSUM
+                        else:
+                            state = _STATE_AT_PACKET_START
 
                 elif state == _STATE_IN_CHECKSUM:
                     # don't care checking for the moment
@@ -830,6 +865,8 @@ class _StreamListener(threading.Thread):
                     # notify a set of packets is available
                     self._packet_event.packets = packets
                     self._packet_event.set()
+                    if trace and trace.stream_fsa:
+                        self._robot.log.debug('packets availability signaled')
 
                     state = _STATE_IDLE
 
