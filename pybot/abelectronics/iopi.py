@@ -10,9 +10,9 @@ are attached to a :py:class:`Port`, modeling a real MCP23017 port. Ports are the
 :py:class:`MCP23017`, which is itself attached to a :py:class:`IOPiBoard`.
 
 All these intricacies such as bit masking on register values and alike are hidden from the user,
-and a lot of things are optimized by caching instances and data for avoiding paying a too high price
+and a lot of things are optimized by caching instances and data for avoiding paying too high a price
 for a high level design. Even if the added overhead could seem penalizing in term of performances,
-thinks are not that obvious, since all the processing done here must be done somewhere anyway. There
+this is not that obvious, since all the processing done here must be done somewhere anyway. There
 are thus chances that the effective penalty (if ever any) will be negligible for most of the
 applications.
 
@@ -426,7 +426,6 @@ class IO(object):
     INT_CHANGE = 0
     INT_COMPARE = 1
 
-
     def __init__(self, port, num, is_input):
         """
         :param Port port: the port the IO is attached to
@@ -439,6 +438,21 @@ class IO(object):
         self._port = port
         port.set_io_direction(num, IO.DIR_INPUT if is_input else IO.DIR_OUTPUT)
         self._mask = 1 << num
+
+    @property
+    def port(self):
+        """ The port this IO belongs to.
+        """
+        return self._port
+
+    @property
+    def mask(self):
+        """ The bit mask of this IO.
+
+        It can be useful for manipulating IOs with port single read/write
+        for optimizing access.
+        """
+        return self._mask
 
 
 class _ReadableIOMixin(object):
