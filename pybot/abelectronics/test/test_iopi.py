@@ -11,31 +11,40 @@ import sys
 
 print("""
 This example blinks a LED connected between pin 8 of IC_1 header and the ground.
-It also reads the state of a button connected between pin 1 of IC_1 header and the ground.
+It also reads the state of buttons connected between pin 1, 2 and 3 of IC_1 header and the ground.
 
 Hit Ctrl-C to terminate.
 """)
 
 board = IOPiBoard(raspi.i2c_bus)
 led = board.get_digital_output(IOPiBoard.EXPANDER_1, 8)
-button = board.get_digital_input(IOPiBoard.EXPANDER_1, 1, pullup_enabled=True)
+buttons = [board.get_digital_input(IOPiBoard.EXPANDER_1, i, pullup_enabled=True) for i in range(1, 4)]
+
+last_states = [1] * 3
 
 
-def display_button_state():
-    print("\033[30Dbutton state = %s" % button.is_set()),
-    sys.stdout.flush()
+def display_buttons_state():
+    states = [buttons[i].is_set() for i in range(0, 3)]
+    if states != last_states:
+        print("\033[30Dbuttons: %s" % states),
+        sys.stdout.flush()
+    return states
 
 try:
     on = True
+    next_change = 0
     while True:
-        if on:
-            led.set()
-        else:
-            led.clear()
+        now = time.time()
+        if now >= next_change:
+            if on:
+                led.set()
+            else:
+                led.clear()
+            next_change = now + 0.5
+            on = not on
 
-        display_button_state()
-        on = not on
-        time.sleep(0.5)
+        last_states = display_buttons_state()
+        time.sleep(0.1)
 
 except KeyboardInterrupt:
     print("\nCtrl-C caught. Terminating program")
