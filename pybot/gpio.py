@@ -9,7 +9,7 @@ This does not mean that we are going to play with the GPIOs of the current syste
 actions by trace messages, so that you'll be able to unit test your code on the
 development station.
 
-On a real hardware, it will transparently relay to RPi.GPIO module to do the real job.
+On a real hardware, it will transparently switch to RPi.GPIO module to do the real job.
 
 In order to use it, you just have to replace
 >>> from RPi import GPIO
@@ -39,8 +39,13 @@ else:
         """ This class mimics the original RPi.GPIO module.
         (http://sourceforge.net/projects/raspberry-gpio-python)
 
-        WARNING: Constant values are NOT the real ones. Anyway, it's a very bad idea to write
-        code depending on constants real value, since this can change.
+        WARNINGS:
+
+        1/ Constant values are NOT the real ones. Anyway, it's a very bad idea to write code depending
+        on constants real value, since this can change.
+
+        2/ the current version does not implement all the methods available in the native GPIO module
+        for the moment. Maybe this will change as new fake ones will be required.
         """
         OUT, IN = 0, 1
         LOW, HIGH = 0, 1

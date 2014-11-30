@@ -1,10 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""
+This example makes servos connected to ports 1 to 3 sweep back and forth in various ways.
+"""
+
 __author__ = 'Eric Pascual'
 
 import time
 import math
+import sys
 
 from pybot.abelectronics.servopi import ServoPiBoard, StopSpecification, Servo
 
@@ -14,22 +19,18 @@ except ImportError:
     from pybot.i2c import SimulatedSMBus
     i2c_bus = SimulatedSMBus()
 
-
-print("""
-This example makes servos connected to ports 1 to 3 sweep back and forth in various ways.
-
-Hit Ctrl-C to terminate.
-""")
+print(sys.modules[__name__].__doc__.strip())
+print("\nHit Ctrl-C to terminate.")
 
 board = ServoPiBoard(i2c_bus)
 
 servos = {
-    # servo 1 set to normal move extent, using the horn angle to be specified in the [-90, 90] range
+    # servo 1 set to normal move extent, the horn angle being specified in the [-90, 90] range
     board.get_servo(
         1, stop_min=StopSpecification(-90, Servo.DEFAULT_MS_MIN), stop_max=StopSpecification(90, Servo.DEFAULT_MS_MAX)
     ),
     # servo 2 set to a reduced move extent, the horn angle being restricted to the [-45, 45] range. The servo will
-    # not move when the position will be outside these bounds
+    # not move when the requested position is outside these bounds
     board.get_servo(
         2, stop_min=StopSpecification(-45, 1), stop_max=StopSpecification(45, 2)
     ),
@@ -56,7 +57,7 @@ try:
         time.sleep(0.05)
 
 except KeyboardInterrupt:
-    print("\nCtrl-C caught. Terminating program")
+    print(" caught. Terminating program\n")
 
     print('Bringing back servos to their median position')
     for servo in servos:

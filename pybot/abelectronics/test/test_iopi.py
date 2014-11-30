@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""
+This example blinks a LED connected between pin 8 of IC_1 header and the ground.
+
+It also reads the state of buttons connected between pin 1, 2 and 3 of IC_1 header and the ground.
+"""
+
 __author__ = 'Eric Pascual'
 
 from pybot.abelectronics.iopi import IOPiBoard
@@ -9,12 +15,8 @@ from pybot import raspi
 import time
 import sys
 
-print("""
-This example blinks a LED connected between pin 8 of IC_1 header and the ground.
-It also reads the state of buttons connected between pin 1, 2 and 3 of IC_1 header and the ground.
-
-Hit Ctrl-C to terminate.
-""")
+print(sys.modules[__name__].__doc__.strip())
+print("\nHit Ctrl-C to terminate.")
 
 board = IOPiBoard(raspi.i2c_bus)
 led = board.get_digital_output(IOPiBoard.EXPANDER_1, 8)
@@ -47,6 +49,6 @@ try:
         time.sleep(0.1)
 
 except KeyboardInterrupt:
-    print("\nCtrl-C caught. Terminating program")
+    print(" caught. Terminating program")
     led.clear()
 

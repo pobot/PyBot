@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""
+This example reads an analog input connected to pin 1 of the header.
+"""
+
 __author__ = 'Eric Pascual'
 
 import sys
@@ -14,12 +18,8 @@ except ImportError:
     from pybot.i2c import SimulatedSMBus
     i2c_bus = SimulatedSMBus()
 
-
-print("""
-This example reads an analog input connected to pin 1 of the header.
-
-Hit Ctrl-C to terminate.
-""")
+print(sys.modules[__name__].__doc__.strip())
+print("\nHit Ctrl-C to terminate.")
 
 board = ADCPiBoard(i2c_bus)
 ain_1 = board.get_analog_input(1, rate=ADCPiBoard.RATE_12)
@@ -45,5 +45,5 @@ try:
         time.sleep(0.5)
 
 except KeyboardInterrupt:
-    print("\nCtrl-C caught. Terminating program")
+    print(" caught. Terminating program")
 
