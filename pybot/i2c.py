@@ -101,8 +101,12 @@ except ImportError:
 
         For non documented methods, just have a look at :py:class:`smbus.SMBus`, since they are identical.
         """
+        @staticmethod
+        def _trace(msg):
+            print('[SMBus.simul] ' + msg)
+
         def __init__(self, bus_id=1):
-            print('[SIM] simulated SMBus created for id=%d' % bus_id)
+            self._trace('simulated SMBus created for id=%d' % bus_id)
             self._bus_id = bus_id
             self._data = [0] * 4
 
@@ -113,41 +117,41 @@ except ImportError:
             self._data = data[:]
 
         def read_byte(self, addr):
-            print("[SIM] reading byte 0x%x from device %d:0x%x" % (self._data[0], self._bus_id, addr))
+            self._trace("reading byte 0x%x from device %d:0x%x" % (self._data[0], self._bus_id, addr))
             return self._data[0]
 
         def write_byte(self, addr, value):
-            print("[SIM] writing byte 0x%x to device %d:0x%x" % (value, self._bus_id, addr))
+            self._trace("writing byte 0x%x to device %d:0x%x" % (value, self._bus_id, addr))
 
         def read_byte_data(self, addr, reg):
-            print("[SIM] reading byte 0x%x from reg 0x%x of device %d:0x%x" % (self._data[0], reg, self._bus_id, addr))
+            self._trace("reading byte 0x%x from reg 0x%x of device %d:0x%x" % (self._data[0], reg, self._bus_id, addr))
             return self._data[0]
 
         def write_byte_data(self, addr, reg, value):
-            print("[SIM] writing byte 0x%x to reg 0x%x of device %d:0x%x" % (value, reg, self._bus_id, addr))
+            self._trace("writing byte 0x%x to reg 0x%x of device %d:0x%x" % (value, reg, self._bus_id, addr))
 
         def read_word_data(self, addr, reg):
-            print("[SIM] reading word 0x%x from reg 0x%x of device %d:0x%x" % (self._data[0], reg, self._bus_id, addr))
+            self._trace("reading word 0x%x from reg 0x%x of device %d:0x%x" % (self._data[0], reg, self._bus_id, addr))
             return self._data[0]
 
         def write_word_data(self, addr, reg, value):
-            print("[SIM] writing word 0x%x to reg 0x%x of device %d:0x%x" % (value, reg, self._bus_id, addr))
+            self._trace("writing word 0x%x to reg 0x%x of device %d:0x%x" % (value, reg, self._bus_id, addr))
 
         def read_block_data(self, addr, reg):
-            print("[SIM] block reading from reg 0x%x of device %d:0x%x -> %s" % (reg, self._bus_id, addr, self._data))
+            self._trace("block reading from reg 0x%x of device %d:0x%x -> %s" % (reg, self._bus_id, addr, self._data))
             return self._data
 
         def write_block_data(self, addr, reg, data):
-            print("[SIM] block writing %s to reg 0x%x of device %d:0x%x" % (data, reg, self._bus_id, addr))
+            self._trace("block writing %s to reg 0x%x of device %d:0x%x" % (data, reg, self._bus_id, addr))
 
         def read_i2c_block_data(self, addr, reg, count):
-            print("[SIM] I2C block reading from reg 0x%x of device %d:0x%x -> %s" %
+            self._trace("I2C block reading from reg 0x%x of device %d:0x%x -> %s" %
                   (reg, self._bus_id, addr, self._data)
             )
             return self._data
 
         def write_i2c_block_data(self, addr, reg, data):
-            print("[SIM] I2C block writing %s to reg 0x%x of device %d:0x%x" % (data, reg, self._bus_id, addr))
+            self._trace("I2C block writing %s to reg 0x%x of device %d:0x%x" % (data, reg, self._bus_id, addr))
 
     SMBus = SimulatedSMBus
 
