@@ -52,10 +52,6 @@ __author__ = 'Eric PASCUAL for POBOT'
 __version__ = '1.0.0'
 __email__ = 'eric@pobot.org'
 
-try:
-    from RPi import GPIO
-except ImportError:
-    GPIO = None
 
 import math
 import time
@@ -123,7 +119,7 @@ class Servo(object):
     """ Logical model of a servo controlled by the board.
     """
     DEFAULT_POS_MIN, DEFAULT_POS_MAX = (0.0, 180.0)
-    DEFAULT_MS_MIN, DEFAULT_MS_MAX = (0.5, 2.5)
+    DEFAULT_MS_MIN, DEFAULT_MS_MAX = (0.6, 2.4)
 
     DEFAULT_STOP_MIN = StopSpecification(DEFAULT_POS_MIN, DEFAULT_MS_MIN)
     DEFAULT_STOP_MAX = StopSpecification(DEFAULT_POS_MAX, DEFAULT_MS_MAX)
@@ -272,11 +268,13 @@ class ServoPiBoard(object):
 
     _ms_to_reg = None
 
-    def __init__(self, bus, i2c_addr=0x40, pwm_freq=60):
+    def __init__(self, bus, i2c_addr=0x40, pwm_freq=60, use_output_enable=False):
         """
         :param bus: the I2C/SMBus the board is connected to
         :param int i2c_addr: the board I2C address
         :param int pwm_freq: the PWM frequency
+        :param bool use_output_enable: set to True if we want to use the output enable signal of the
+          PCA9685 chip. Remember to short the OE pads on the board in this case.
         """
         self._bus = bus
         self._i2c_addr = i2c_addr
@@ -284,12 +282,25 @@ class ServoPiBoard(object):
 
         self.write_reg(self.MODE1, 0)
 
-        if GPIO:
+        # optimize to GPIO stuff loading depending on the fact we really need it or not
+        if use_output_enable:
+            from pybot.gpio import GPIO
+            self._GPIO = GPIO
             GPIO.setwarnings(False)
             GPIO.setmode(GPIO.BOARD)
             GPIO.setup(self._ENABLE_GPIO, GPIO.OUT)
+            self.enable_all()
+        else:
+            self._GPIO = None
 
         self.set_pwm_freq(pwm_freq)
+
+    def shutdown(self):
+        """ Puts all servos in floating mode and disables PCA9685 outputs.
+        """
+        for servo in self._servos.values():
+            servo.set_floating()
+        self.disable_all()
 
     def set_pwm_freq(self, hz):
         """ Configures the PWM frequency
@@ -315,14 +326,14 @@ class ServoPiBoard(object):
     def enable_all(self):
         """ Enables all the chip outputs
         """
-        if GPIO:
-            GPIO.output(self._ENABLE_GPIO, 1)
+        if self._GPIO:
+            self._GPIO.output(self._ENABLE_GPIO, 0)
 
     def disable_all(self):
         """ Disables all the chip outputs
         """
-        if GPIO:
-            GPIO.output(self._ENABLE_GPIO, 0)
+        if self._GPIO:
+            self._GPIO.output(self._ENABLE_GPIO, 1)
 
     def write_reg(self, reg, value):
         """ Chip register setter
