@@ -45,7 +45,7 @@ try:
 
     while True:
         # make the position span the [-90, 90] range, using a sinusoidal control law to get smooth direction changes
-        # by decelerating and acceleration at inversion points
+        # by decelerating and accelerating at inversion points
         position = math.cos(a) * 90.0
         for servo in servos:
             servo.set_position(position)
