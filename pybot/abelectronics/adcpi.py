@@ -54,8 +54,13 @@ class ADCPiBoard(object):
     RATE_12, RATE_14, RATE_16, RATE_18 = range(4)
     # gains
     GAIN_x1, GAIN_x2, GAIN_x4, GAIN_x8 = range(4)
+    # resolutions (bits)
+    RESOLUTIONS = (12, 14, 16, 18)
 
-    def __init__(self, bus, conv1_addr=0x68, conv2_addr=0x69):
+    CONV1_DEFAULT_ADDRESS = 0x68
+    CONV2_DEFAULT_ADDRESS = 0x68
+
+    def __init__(self, bus, conv1_addr=CONV1_DEFAULT_ADDRESS , conv2_addr=CONV2_DEFAULT_ADDRESS):
         """ An instance of the I2C/SMBus class must be provided here. The calls used in the
         classes of this module are based on the smbus.SMBus interface. Any implementation providing
         the same API can thus be used, including fake ones for testing.
@@ -66,8 +71,8 @@ class ADCPiBoard(object):
         """
         self._bus = bus
         self._converters = (
-            MCP3424(bus, conv1_addr),
-            MCP3424(bus, conv2_addr),
+            Converter(bus, conv1_addr),
+            Converter(bus, conv2_addr),
         )
         self._adcs = {}
 
@@ -108,7 +113,7 @@ class ADCPiBoard(object):
         return board_io_num / 4, board_io_num % 4
 
 
-class MCP3424(object):
+class Converter(object):
     """ Models the MCP3424 converter chip, and handles its low level operations.
     """
     def __init__(self, bus, i2c_addr):
@@ -176,7 +181,7 @@ class AnalogInput(object):
 
     def __init__(self, converter, channel_num, rate=ADCPiBoard.RATE_12, gain=ADCPiBoard.GAIN_x1, single=False):
         """
-        :param MCP3424 converter: the MCP chip this input belongs to
+        :param Converter converter: the MCP chip this input belongs to
         :param int channel_num: ADC channel num ([0-3]
         :param bool single: True for single sample mode
         :param int rate: sample rate and resolution selector (RATE_nn)
