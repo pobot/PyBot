@@ -64,7 +64,7 @@ class StopSpecification(namedtuple("StopSpecification", "logical_position msecs"
     """ A named tuple defining a stop position (i.e. extent limit) of the servo.
 
     The position is defined by the corresponding pulse duration and the associated
-    application level value. This value can be an angle in degrees, a 0-100 range percentage,...
+    application domain value. This value can be an angle in degrees, a 0-100 range percentage,...
     Said differently, it defines the scale, the unit and the possible direction reversal used
     by the application to provide a position (absolute or relative) for the servo.
 
@@ -114,6 +114,9 @@ class StopSpecification(namedtuple("StopSpecification", "logical_position msecs"
         """
         return StopSpecification(self.logical_position * factor, self.msecs * factor)
 
+    def __str__(self):
+        return '(p:%.1f t:%.1f)' % (self.logical_position, self.msecs)
+
 
 class Servo(object):
     """ Logical model of a servo controlled by the board.
@@ -160,13 +163,18 @@ class Servo(object):
         self._position_to_msecs = self._position_to_msec_direct if self._pos_to_ms > 0 else self._position_to_msec_inverted
         self._current_position = None
 
+    def __str__(self):
+        return "{min=%s max=%s}" % (self._stop_min, self._stop_max)
+
+    __repr__ = __str__
+
     def _position_to_msec_direct(self, position):
         position = min(max(position, self._stop_min.logical_position), self._stop_max.logical_position)
-        return self._stop_min.msecs + self._pos_to_ms * (position - self._stop_min.logical_position)
+        return self._stop_min.msecs + self._pos_to_ms * (position - self._stop_min.logical_position), position
 
     def _position_to_msec_inverted(self, position):
         position = min(max(position, self._stop_max.logical_position), self._stop_min.logical_position)
-        return self._stop_max.msecs - self._pos_to_ms * (position - self._stop_min.logical_position)
+        return self._stop_max.msecs + self._pos_to_ms * (position - self._stop_max.logical_position), position
 
     def set_position(self, position, force=False):
         """ Moves the servo to the given position.
@@ -182,12 +190,12 @@ class Servo(object):
         if not force and position == self._current_position:
             return
 
-        ms = self._position_to_msecs(position)
-        self._current_position = position
+        ms, real_position = self._position_to_msecs(position)
         raw = self._board.ms_to_reg(ms)
         values = (0, 0, raw & 0xff, raw >> 8)
         for r, v in zip(self._regs, values):
             self._board.write_reg(r, v)
+        self._current_position = real_position
 
     @property
     def current_position(self):
@@ -266,9 +274,12 @@ class ServoPiBoard(object):
 
     _ENABLE_GPIO = 7
 
+    DEFAULT_ADDRESS = 0x40
+    DEFAULT_PWM_FREQ = 60
+
     _ms_to_reg = None
 
-    def __init__(self, bus, i2c_addr=0x40, pwm_freq=60, use_output_enable=False):
+    def __init__(self, bus, i2c_addr=DEFAULT_ADDRESS, pwm_freq=DEFAULT_PWM_FREQ, use_output_enable=False):
         """
         :param bus: the I2C/SMBus the board is connected to
         :param int i2c_addr: the board I2C address
