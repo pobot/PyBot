@@ -80,7 +80,10 @@ class IOPiBoard(object):
     EXPANDER_1 = 0
     EXPANDER_2 = 1
 
-    def __init__(self, bus, exp1_addr=0x20, exp2_addr=0x21):
+    EXP1_DEFAULT_ADDRESS = 0x20
+    EXP2_DEFAULT_ADDRESS = 0x21
+
+    def __init__(self, bus, exp1_addr=EXP1_DEFAULT_ADDRESS, exp2_addr=EXP2_DEFAULT_ADDRESS):
         """ An instance of the I2C/SMBus class must be provided here. The calls used in the
         classes of this module are based on the smbus.SMBus interface. Any implementation providing
         the same API can thus be used, including fake ones for testing.
@@ -90,9 +93,9 @@ class IOPiBoard(object):
         :param int exp2_addr: I2C address of expander 1
         """
         self._bus = bus
-        self._expanders = (
-            MCP23017(bus, exp1_addr),
-            MCP23017(bus, exp2_addr),
+        self.expanders = (
+            Expander(bus, exp1_addr),
+            Expander(bus, exp2_addr),
         )
         self._ios = {}
 
@@ -109,7 +112,7 @@ class IOPiBoard(object):
         except KeyError:
             # not yet created => do it
             port_num, io_num = self._board_io_num_to_port_io(board_io_num)
-            port = self._expanders[expander_num].ports[port_num]
+            port = self.expanders[expander_num].ports[port_num]
 
             # create the instance of the appropriate class, depending on the IO type
             if direction == IO.DIR_INPUT:
@@ -125,7 +128,7 @@ class IOPiBoard(object):
         it as requested.
         :param int expander_num: IOPiBoard.EXPANDER_1 or IOPiBoard.EXPANDER_2
         :param int board_io_num: the pin number of the IO on the expander header
-        :param pullup_enabled: should the internal pullup be enabled or not
+        :param pullup_enabled: should the internal pull-up be enabled or not
         :return: the IO object
         :rtype: DigitalInput
         """
@@ -140,6 +143,24 @@ class IOPiBoard(object):
         """
         return self._get_io(expander_num, board_io_num, direction=IO.DIR_OUTPUT)
 
+    def read(self):
+        """ Reads all ports of all expanders and returns their values as a single 32 bits integer.
+
+        The returned integer is built as follows:
+            MSB1 = expander_2.port_B
+            LSB1 = expander_2.port_A
+            MSB0 = expander_1.port_B
+            LSB0 = expander_1.port_A
+
+        :return: all board ports content
+        """
+        return ((self.expanders[self.EXPANDER_2].read() << 16) | self.expanders[self.EXPANDER_1].read()) & 0xffffffff
+
+    def reset(self):
+        """ Resets both expanders of the board
+        """
+        for expander in self.expanders:
+            expander.reset()
 
     @staticmethod
     def _board_io_num_to_port_io(board_io_num):
@@ -147,7 +168,7 @@ class IOPiBoard(object):
         return board_io_num / 8, board_io_num % 8
 
 
-class MCP23017(object):
+class Expander(object):
     """ Models the MCP23017 expander chip, and handles its low level operations.
 
     This class aggregates the two ports included in the chip.
@@ -205,7 +226,7 @@ class MCP23017(object):
         Since the method takes care of clamping the passed value to a byte
         extent, it also returns the clamped value for convenience.
 
-        :param int addr: register address
+        :param int reg: register address
         :param int data: register value
         :return: the written data
         :rtype: int
@@ -213,6 +234,20 @@ class MCP23017(object):
         data &= 0xff
         self._bus.write_byte_data(self._addr, reg, data)
         return data
+
+    def read(self):
+        """ Reads both expander ports and return their values as a 16 bits integer.
+
+        :return: 2 bytes integer with PORTB and PORTA values as respectively MSB and LSB
+        :rtype: int
+        """
+        return ((self.ports[Expander.PORT_B].read() << 8) | self.ports[Expander.PORT_A].read()) & 0xffff
+
+    def reset(self):
+        """ Resets both ports
+        """
+        for port in self.ports:
+            port.reset()
 
 
 class Port(object):
@@ -233,25 +268,25 @@ class Port(object):
 
     def __init__(self, expander, port_num):
         """
-        :param MCP23017 expander: MCP23017 instance this port belongs to
-        :param int port_num: the port num (MCP23017.PORT_A or MCP23017.PORT_B).
+        :param Expander expander: Expander instance this port belongs to
+        :param int port_num: the port num (Expander.PORT_A or Expander.PORT_B).
         """
-        if port_num not in (MCP23017.PORT_A, MCP23017.PORT_B):
+        if port_num not in (Expander.PORT_A, Expander.PORT_B):
             raise ValueError("invalid port num (%d)" % port_num)
         self._expander = expander
         self._port_num = port_num
-        # initializes the registers cache
+        # initializes the registers cache
         self.update_cache()
 
     def update_cache(self):
         """ Updates the registers cache. """
-        self._IODIR_cache = self._expander.read_register(MCP23017.IODIR + self._port_num)
-        self._GPPU_cache = self._expander.read_register(MCP23017.GPPU + self._port_num)
-        self._IPOL_cache = self._expander.read_register(MCP23017.IPOL + self._port_num)
-        self._IOCON_cache = self._expander.read_register(MCP23017.IOCON + self._port_num)
-        self._GPINTEN_cache = self._expander.read_register(MCP23017.GPINTEN + self._port_num)
-        self._DEFVAL_cache = self._expander.read_register(MCP23017.DEFVAL + self._port_num)
-        self._INTCON_cache = self._expander.read_register(MCP23017.INTCON + self._port_num)
+        self._IODIR_cache = self._expander.read_register(Expander.IODIR + self._port_num)
+        self._GPPU_cache = self._expander.read_register(Expander.GPPU + self._port_num)
+        self._IPOL_cache = self._expander.read_register(Expander.IPOL + self._port_num)
+        self._IOCON_cache = self._expander.read_register(Expander.IOCON + self._port_num)
+        self._GPINTEN_cache = self._expander.read_register(Expander.GPINTEN + self._port_num)
+        self._DEFVAL_cache = self._expander.read_register(Expander.DEFVAL + self._port_num)
+        self._INTCON_cache = self._expander.read_register(Expander.INTCON + self._port_num)
 
     @staticmethod
     def _change_bit(bit_num, value, byte):
@@ -284,7 +319,7 @@ class Port(object):
         """ Sets the port IO directions configuration.
         :param int dirs: a byte containing the IO direction flags for all the IO of the port
         """
-        self._IODIR_cache = self._expander.write_register(MCP23017.IODIR + self._port_num, dirs)
+        self._IODIR_cache = self._expander.write_register(Expander.IODIR + self._port_num, dirs)
 
     def set_io_direction(self, io_num, direction):
         """ Sets the direction of a single IO
@@ -303,7 +338,7 @@ class Port(object):
     @pullups_enabled.setter
     def pullups_enabled(self, settings):
         """ Configures the port inputs pullups. """
-        self._GPPU_cache = self._expander.write_register(MCP23017.GPPU + self._port_num, settings)
+        self._GPPU_cache = self._expander.write_register(Expander.GPPU + self._port_num, settings)
 
     def enable_pullup(self, io_num, enabled):
         """ Configures a single input pullup.
@@ -322,7 +357,7 @@ class Port(object):
     @inputs_inverted.setter
     def inputs_inverted(self, settings):
         """ Configures the port inputs polarity inversion. """
-        self._IPOL_cache = self._expander.write_register(MCP23017.IPOL + self._port_num, settings)
+        self._IPOL_cache = self._expander.write_register(Expander.IPOL + self._port_num, settings)
 
     def invert_input(self, io_num, inverted):
         """ Configures the inversion of a given input.
@@ -341,7 +376,7 @@ class Port(object):
     @interrupts_enabled.setter
     def interrupts_enabled(self, settings):
         """ Configures the port inputs interrupts enabling. """
-        self._GPINTEN_cache = self._expander.write_register(MCP23017.GPINTEN + self._port_num, settings)
+        self._GPINTEN_cache = self._expander.write_register(Expander.GPINTEN + self._port_num, settings)
 
     def enable_interrupt(self, io_num, enabled):
         """ Enables interrupts for a given input.
@@ -360,7 +395,7 @@ class Port(object):
     @interrupt_sources.setter
     def interrupt_sources(self, settings):
         """ Configures the port interrupt compare sources. """
-        self._INTCON_cache = self._expander.write_register(MCP23017.INTCON + self._port_num, settings)
+        self._INTCON_cache = self._expander.write_register(Expander.INTCON + self._port_num, settings)
 
     def set_interrupt_source(self, io_num, source):
         """ Sets the compare source for input interrupts for a given input.
@@ -379,7 +414,7 @@ class Port(object):
     @default_values.setter
     def default_values(self, settings):
         """ Configures the port interrupt default values. """
-        self._DEFVAL_cache = self._expander.write_register(MCP23017.DEFVAL + self._port_num, settings)
+        self._DEFVAL_cache = self._expander.write_register(Expander.DEFVAL + self._port_num, settings)
 
     def set_default_value(self, io_num, value):
         """ Sets the input change default value for a given input.
@@ -401,16 +436,23 @@ class Port(object):
     def write(self, value):
         """ Write a value to the port
         :param int value: the value to be written
-        :return: the clamped value (see :py:meth:`MCP23017.write_register`)
+        :return: the clamped value (see :py:meth:`Expander.write_register`)
         :rtype: int
         """
-        return self._expander.write_register(MCP23017.GPIO + self._port_num, value)
+        return self._expander.write_register(Expander.GPIO + self._port_num, value)
 
     def read(self):
         """ Reads the port.
         :return: the port content
         """
-        return self._expander.read_register(MCP23017.GPIO + self._port_num)
+        return self._expander.read_register(Expander.GPIO + self._port_num) & 0xff
+
+    def reset(self):
+        """ Puts the port in default POR state
+        """
+        self.interrupts_enabled = 0
+        self.pullups_enabled = 0
+        self.io_directions = 0xff
 
     def dump(self):
         """ Internal method for debugging."""
@@ -464,17 +506,17 @@ class _ReadableIOMixin(object):
     _port = None
     _mask = None
 
-    def get(self):
+    def read(self):
         """ Returns the bit value (0 or 1) of the IO. """
         return 1 if self._port.read() & self._mask else 0
 
     def is_set(self):
         """ Returns True if the IO is high. """
-        return self.get()
+        return self.read()
 
     def is_clear(self):
         """ Returns True if the IO is low. """
-        return not self.get()
+        return not self.read()
 
 
 class DigitalInput(IO, _ReadableIOMixin):
