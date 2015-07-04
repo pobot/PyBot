@@ -1,3 +1,7 @@
+**WARNING** : This repository is being reworked to split it into its independant components, for a better modularity. 
+
+*It thus must be considered as deprecated and no more maintained as is.*
+
 A collection of Python packages for interfacing hardwares with a RasPi (but not
 only).
 
