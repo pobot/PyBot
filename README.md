@@ -1,6 +1,11 @@
-**WARNING** : This repository is being reworked to split it into its independant components, for a better modularity. 
+**WARNING**
+This repository is being reworked to split it into separated repositories, for a better modularity. 
+It thus must be considered as deprecated and no more maintained as is.
 
-*It thus must be considered as deprecated and no more maintained as is.*
+In addition, to avoid cluttering the POBOT main organisation repositories, these new repositories have been mode to a new organization : pobot-pybot (https://github.com/pobot-pybot).
+
+Overview
+--------
 
 A collection of Python packages for interfacing hardwares with a RasPi (but not
 only).
@@ -10,6 +15,9 @@ for any other purpose of course.
 
 All this stuff is not intended to be used by blindly installing it, although
 it can be, but more as a source of inspiration and documentation.
+
+Content
+-------
 
 The repository contains 3 parts :
 - pybot/ 
