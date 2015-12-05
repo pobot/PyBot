@@ -3,7 +3,7 @@
 This repository is being reworked to split it into separated repositories, for a better modularity. 
 It thus must be considered as deprecated and no more maintained as is.
 
-In addition, to avoid cluttering the POBOT main organisation repositories, these new repositories have been mode to a new organization : pobot-pybot (https://github.com/pobot-pybot).
+In addition, to avoid cluttering the POBOT main organisation repositories, these new repositories have been moved to a new organization : pobot-pybot (https://github.com/pobot-pybot).
 
 Overview
 --------
